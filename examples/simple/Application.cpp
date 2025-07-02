@@ -18,42 +18,31 @@
 #include "wolk/WolkBuilder.h"
 #include "wolk/WolkSingle.h"
 
-#include <random>
-#include <fstream> 
+#include <fstream>
 #include <iostream>
+#include <random>
 #include <string>
 #include <vector>
 
-std::vector<std::string> ucitajConf(){
-    const std::string putanja = "/home/nbalog/Desktop/NB Zadatak/WolkConnect-Cpp/txtFiles/conf";
-    std::ifstream fajl(putanja);
-    
-    if(fajl.fail()){
+std::vector<std::string> readConfig(std::string path)
+{
+    std::ifstream file(path);
+
+    if (file.fail())
+    {
         return {};
     }
 
-    std::vector<std::string> vektor;
-    std::string linija;
-    while(getline(fajl, linija)){
-        vektor.push_back(linija);
+    std::vector<std::string> configInfo;
+    std::string lineInFile;
+    while (getline(file, lineInFile))
+    {
+        configInfo.push_back(lineInFile);
     }
 
-
-
-    fajl.close();
-    return vektor;
+    file.close();
+    return configInfo;
 }
-/**
- * This is the place where user input is required for running the example.
- * In here, you can enter the device credentials to successfully identify the device on the platform.
- * And also, the target platform path.
- */
-
-const std::vector<std::string> config = ucitajConf();
-
-const std::string DEVICE_KEY = config[0];
-const std::string DEVICE_PASSWORD = config[1];
-const std::string PLATFORM_HOST = config[2];
 
 /**
  * This is a function that will generate a random Temperature value for us.
@@ -71,22 +60,31 @@ std::uint64_t generateRandomValue()
     return static_cast<std::uint64_t>(distribution(engine));
 }
 
-int main(int /* argc */, char** /* argv */)
+int main(int argc, char** argv)
 {
-    
+    if (argv[1] == NULL)
+    {
+        std::cout << "Write the location of the config file as an argument" << std::endl;
+        return 0;
+    }
+
+    std::vector<std::string> config = readConfig(argv[1]);
+
+    if (config.empty())
+    {
+        std::cout << "Couldn't load file" << std::endl;
+        return 0;
+    }
 
     // This is the logger setup. Here you can set up the level of logging you would like enabled.
     wolkabout::Logger::init(wolkabout::LogLevel::INFO, wolkabout::Logger::Type::CONSOLE);
 
     // Here we create the device that we are presenting as on the platform.
-    auto device = wolkabout::Device(DEVICE_KEY, DEVICE_PASSWORD, wolkabout::OutboundDataMode::PUSH);
+    auto device = wolkabout::Device(config[0], config[1], wolkabout::OutboundDataMode::PUSH);
 
     // And here we create the wolk session
-    auto wolk = wolkabout::connect::WolkSingle::newBuilder(device).host(PLATFORM_HOST).buildWolkSingle();
+    auto wolk = wolkabout::connect::WolkSingle::newBuilder(device).host(config[2]).buildWolkSingle();
     wolk->connect();
-
-    //std::vector<std::string> test = ucitajConf();
-    //std::cout<<test[0]<<"   "<<test[1]<<std::endl;
 
     // And now we will periodically (and endlessly) send a random temperature value.
     while (true)
@@ -95,9 +93,6 @@ int main(int /* argc */, char** /* argv */)
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         wolk->publish();
     }
-
-    
-   
 
     return 0;
 }
