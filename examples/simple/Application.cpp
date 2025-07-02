@@ -19,15 +19,41 @@
 #include "wolk/WolkSingle.h"
 
 #include <random>
+#include <fstream> 
+#include <iostream>
+#include <string>
+#include <vector>
 
+std::vector<std::string> ucitajConf(){
+    const std::string putanja = "/home/nbalog/Desktop/NB Zadatak/WolkConnect-Cpp/txtFiles/conf";
+    std::ifstream fajl(putanja);
+    
+    if(fajl.fail()){
+        return {};
+    }
+
+    std::vector<std::string> vektor;
+    std::string linija;
+    while(getline(fajl, linija)){
+        vektor.push_back(linija);
+    }
+
+
+
+    fajl.close();
+    return vektor;
+}
 /**
  * This is the place where user input is required for running the example.
  * In here, you can enter the device credentials to successfully identify the device on the platform.
  * And also, the target platform path.
  */
-const std::string DEVICE_KEY = "<DEVICE_KEY>";
-const std::string DEVICE_PASSWORD = "<DEVICE_PASSWORD>";
-const std::string PLATFORM_HOST = "tcp://INSERT_HOSTNAME:PORT";
+
+const std::vector<std::string> config = ucitajConf();
+
+const std::string DEVICE_KEY = config[0];
+const std::string DEVICE_PASSWORD = config[1];
+const std::string PLATFORM_HOST = config[2];
 
 /**
  * This is a function that will generate a random Temperature value for us.
@@ -47,6 +73,8 @@ std::uint64_t generateRandomValue()
 
 int main(int /* argc */, char** /* argv */)
 {
+    
+
     // This is the logger setup. Here you can set up the level of logging you would like enabled.
     wolkabout::Logger::init(wolkabout::LogLevel::INFO, wolkabout::Logger::Type::CONSOLE);
 
@@ -57,6 +85,9 @@ int main(int /* argc */, char** /* argv */)
     auto wolk = wolkabout::connect::WolkSingle::newBuilder(device).host(PLATFORM_HOST).buildWolkSingle();
     wolk->connect();
 
+    //std::vector<std::string> test = ucitajConf();
+    //std::cout<<test[0]<<"   "<<test[1]<<std::endl;
+
     // And now we will periodically (and endlessly) send a random temperature value.
     while (true)
     {
@@ -64,5 +95,9 @@ int main(int /* argc */, char** /* argv */)
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         wolk->publish();
     }
+
+    
+   
+
     return 0;
 }
