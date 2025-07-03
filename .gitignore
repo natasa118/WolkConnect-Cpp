@@ -20,3 +20,6 @@ cmake-build-release
 
 # Debian build
 tools/release-*/
+
+.vscode/
+txtFiles/
