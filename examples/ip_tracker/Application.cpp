@@ -19,15 +19,14 @@
 #include "wolk/WolkBuilder.h"
 #include "wolk/WolkSingle.h"
 
+#include <arpa/inet.h>
 #include <fstream>
+#include <ifaddrs.h>
 #include <iostream>
+#include <netdb.h>
 #include <random>
 #include <string>
 #include <vector>
-
-#include <ifaddrs.h>
-#include <netdb.h>
-#include <arpa/inet.h>
 
 std::vector<std::string> readConfig(const std::string& path)
 {
@@ -111,7 +110,26 @@ std::map<std::string, std::string> returnIpAddress()
     return ipMap;
 }
 
-void publishIPAddress() {}
+// reads CPU temperature
+double readCPUTemperature()
+{
+    const std::string path = "/sys/class/thermal/thermal_zone0/temp";
+    std::ifstream tempFile(path);
+    double temperature = 0.0;
+
+    if (tempFile.is_open())
+    {
+        int tempInMilli;
+        tempFile >> tempInMilli;
+        temperature = tempInMilli / 1000.0;
+        tempFile.close();
+    }
+    else
+    {
+        std::cout << "Unable to open temperature file " << std::endl;
+    }
+    return temperature;
+}
 
 int main(int argc, char** argv)
 {
@@ -146,16 +164,20 @@ int main(int argc, char** argv)
     auto wolk = wolkabout::connect::WolkSingle::newBuilder(device).host(config[2]).buildWolkSingle();
     wolk->connect();
 
-    // send initial readings
+    // send initial readings for IP and CPU temperature
     std::map<std::string, std::string> currentIpMap = newIpMap;
     for (auto const& element : currentIpMap)
     {
         wolk->addReading(element.first, element.second);
     }
 
-    wolkabout::Timer timerIP;
+    std::vector<double> cpuTemp;
+    wolk->addReading("cpuT", readCPUTemperature());
 
-    // check every 5mins if the ip address changed
+    // Making timers
+    wolkabout::Timer timerIP, timerCpuTemp;
+
+    // check every 5 minutes if the IP address changed
     timerIP.run(std::chrono::minutes(5),
                 [&newIpMap, &currentIpMap, &wolk]
                 {
@@ -173,6 +195,19 @@ int main(int argc, char** argv)
                     }
                     wolk->publish();
                 });
+    // check every minute for new temperature and send the highest every 5 minutes
+    timerCpuTemp.run(std::chrono::minutes(1),
+                     [&cpuTemp, &wolk]
+                     {
+                         cpuTemp.push_back(readCPUTemperature());
+                         if (cpuTemp.size() == 5)
+                         {
+                             auto maxTempAddr = std::max_element(cpuTemp.begin(), cpuTemp.end());
+                             wolk->addReading("cpuT", *maxTempAddr);
+                             wolk->publish();
+                             cpuTemp.clear();
+                         }
+                     });
 
     while (true)
     {
