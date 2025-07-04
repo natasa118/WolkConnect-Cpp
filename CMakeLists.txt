@@ -281,6 +281,15 @@ if (${BUILD_EXAMPLES})
     target_include_directories(subdevices_example PRIVATE ${PROJECT_SOURCE_DIR})
     set_target_properties(subdevices_example PROPERTIES INSTALL_RPATH "$ORIGIN/../lib")
 
+    #IP Tracker
+    set(IP_TRACKER_SOURCE_FILES examples/ip_tracker/Application.cpp)
+
+    add_executable(ip_tracker ${IP_TRACKER_SOURCE_FILES})
+    target_link_libraries(ip_tracker ${PROJECT_NAME})
+    target_include_directories(ip_tracker PRIVATE ${PROJECT_SOURCE_DIR})
+    set_target_properties(ip_tracker PROPERTIES INSTALL_RPATH "$ORIGIN/../lib")
+
+
     # Debian package installation example
     if (${BUILD_APT_SYSTEMD_FIRMWARE_UPDATER})
         set(DEBIAN_EXAMPLE_SOURCE_FILES examples/debian-package-installation/Application.cpp)
