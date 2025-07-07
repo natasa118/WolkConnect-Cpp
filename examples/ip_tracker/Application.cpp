@@ -28,6 +28,128 @@
 #include <string>
 #include <vector>
 
+// Synchronization tools
+std::mutex mutex;
+std::condition_variable conditionVariable;
+
+// returns string from LogLevel
+std::string toString(wolkabout::LogLevel level)
+{
+    if (level == wolkabout::LogLevel::INFO)
+    {
+        return "INFO";
+    }
+    else if (level == wolkabout::LogLevel::WARN)
+    {
+        return "WARN";
+    }
+    else if (level == wolkabout::LogLevel::ERROR)
+    {
+        return "ERROR";
+    }
+    else if (level == wolkabout::LogLevel::DEBUG)
+    {
+        return "DEBUG";
+    }
+    else if (level == wolkabout::LogLevel::TRACE)
+    {
+        return "TRACE";
+    }
+    else if (level == wolkabout::LogLevel::OFF)
+    {
+        return "OFF";
+    }
+    else
+    {
+        return "";
+    }
+}
+// returns LogLevel and if string is valid LogLevel
+std::pair<wolkabout::LogLevel, bool> fromString(std::string in)
+{
+    if (in == "INFO")
+    {
+        return std::make_pair(wolkabout::LogLevel::INFO, true);
+    }
+    else if (in == "WARN")
+    {
+        return std::make_pair(wolkabout::LogLevel::WARN, true);
+    }
+    else if (in == "ERROR")
+    {
+        return std::make_pair(wolkabout::LogLevel::ERROR, true);
+    }
+    else if (in == "DEBUG")
+    {
+        return std::make_pair(wolkabout::LogLevel::DEBUG, true);
+    }
+    else if (in == "TRACE")
+    {
+        return std::make_pair(wolkabout::LogLevel::TRACE, true);
+    }
+    else if (in == "OFF")
+    {
+        return std::make_pair(wolkabout::LogLevel::OFF, true);
+    }
+    else
+    {
+        return std::make_pair(wolkabout::LogLevel::INFO, false);
+    }
+}
+// Class for handling recieved data from feed
+class DeviceDataChangeHandler : public wolkabout::connect::FeedUpdateHandler
+{
+public:
+    DeviceDataChangeHandler(std::string log, bool valid) : m_previousLog(log), m_isLogValid(valid) {}
+
+    void handleUpdate(const std::string& deviceKey,
+                      const std::map<std::uint64_t, std::vector<wolkabout::Reading>>& readings) override
+    {
+        // Go through all the timestamps
+        for (const auto& pair : readings)
+        {
+            LOG(DEBUG) << "Received feed information for time: " << pair.first;
+
+            // Take the readings, and apply them
+            for (const auto& reading : pair.second)
+            {
+                LOG(DEBUG) << "Received feed information for reference '" << reading.getReference() << "'.";
+
+                // Lock the mutex
+                std::lock_guard<std::mutex> lock{mutex};
+
+                // Check the reference on the readings
+                if (reading.getReference() == "log")
+                {
+                    auto in = fromString(reading.getStringValue());
+                    if (in.second)
+                    {
+                        wolkabout::Logger::getInstance().setLevel(in.first);
+                        m_previousLog = toString(in.first);
+                        LOG(INFO) << "Log has been updated";
+                    }
+                    else
+                    {
+                        LOG(INFO) << "Unknown log value";
+                        m_isLogValid = false;
+                    }
+                }
+            }
+
+            // Notify the condition variable
+            conditionVariable.notify_one();
+        }
+    }
+    bool isLogValid() { return m_isLogValid; }
+    std::string previousLogValue() { return m_previousLog; }
+    void updateLogToValid() { m_isLogValid = true; }
+
+private:
+    std::string m_previousLog;
+    bool m_isLogValid;
+};
+
+// Trying to read config file
 std::vector<std::string> readConfig(const std::string& path)
 {
     std::ifstream file(path);
@@ -48,23 +170,7 @@ std::vector<std::string> readConfig(const std::string& path)
     return configInfo;
 }
 
-/**
- * This is a function that will generate a random Temperature value for us.
- *
- * @return A new Temperature value, in the range of -20 to 80.
- */
-std::uint64_t generateRandomValue()
-{
-    // Here we will create the random engine and distribution
-    static auto engine =
-      std::mt19937(static_cast<std::uint32_t>(std::chrono::system_clock::now().time_since_epoch().count()));
-    static auto distribution = std::uniform_real_distribution<>(-20, 80);
-
-    // And generate a random value
-    return static_cast<std::uint64_t>(distribution(engine));
-}
-
-// Funsction returns ip address in order loop, ethernet, wifi for IP4 and then for IP6
+// Function returns IP address in order loop, ethernet, wifi for IP4 and then for IP6
 std::map<std::string, std::string> returnIpAddress()
 {
     struct ifaddrs* ifaddr = NULL;
@@ -110,7 +216,7 @@ std::map<std::string, std::string> returnIpAddress()
     return ipMap;
 }
 
-// reads CPU temperature
+// Reads CPU temperature
 double readCPUTemperature()
 {
     const std::string path = "/sys/class/thermal/thermal_zone0/temp";
@@ -147,70 +253,83 @@ int main(int argc, char** argv)
     }
     std::cout << "Config file loaded successfully" << std::endl;
 
-    // Getting Ip Address
+    // Getting IP Address
     std::map<std::string, std::string> newIpMap = returnIpAddress();
     if (newIpMap.empty())
     {
         std::cout << "Couldn't find IP Address" << std::endl;
     }
 
-    // This is the logger setup. Here you can set up the level of logging you would like enabled.
-    wolkabout::Logger::init(wolkabout::LogLevel::INFO, wolkabout::Logger::Type::CONSOLE);
+    // This is the logger setup
+    wolkabout::Logger::init(wolkabout::LogLevel::INFO,
+                            wolkabout::Logger::Type::CONSOLE | wolkabout::Logger::Type::FILE);
 
     // Here we create the device that we are presenting as on the platform.
     auto device = wolkabout::Device(config[0], config[1], wolkabout::OutboundDataMode::PUSH);
 
+    auto deviceInfoHandler = std::make_shared<DeviceDataChangeHandler>(toString(wolkabout::LogLevel::INFO), true);
+
     // And here we create the wolk session
-    auto wolk = wolkabout::connect::WolkSingle::newBuilder(device).host(config[2]).buildWolkSingle();
+    auto wolk =
+      wolkabout::connect::WolkBuilder(device).host(config[2]).feedUpdateHandler(deviceInfoHandler).buildWolkSingle();
     wolk->connect();
 
-    // send initial readings for IP and CPU temperature
+    // Setting initial log value
+    wolk->addReading("log", deviceInfoHandler->previousLogValue());
+
+    // Initial readings for IP
     std::map<std::string, std::string> currentIpMap = newIpMap;
     for (auto const& element : currentIpMap)
     {
         wolk->addReading(element.first, element.second);
     }
 
+    // Initial CPU temperature
     std::vector<double> cpuTemp;
-    wolk->addReading("cpuT", readCPUTemperature());
+    double initialCpuTemp = readCPUTemperature();
+    wolk->addReading("cpuT", initialCpuTemp);
 
     // Making timers
     wolkabout::Timer timerIP, timerCpuTemp;
 
     // check every 5 minutes if the IP address changed
-    timerIP.run(std::chrono::minutes(5),
-                [&newIpMap, &currentIpMap, &wolk]
+    timerIP.run(std::chrono::minutes(5), [&newIpMap, &currentIpMap, &wolk] {
+        newIpMap = returnIpAddress();
+        if (!(newIpMap == currentIpMap))
+        {
+            for (auto const& element : newIpMap)
+            {
+                if (currentIpMap[element.first] != element.second)
                 {
-                    newIpMap = returnIpAddress();
-                    if (!(newIpMap == currentIpMap))
-                    {
-                        for (auto const& element : newIpMap)
-                        {
-                            if (currentIpMap[element.first] != element.second)
-                            {
-                                wolk->addReading(element.first, element.second);
-                            }
-                        }
-                        currentIpMap = newIpMap;
-                    }
-                    wolk->publish();
-                });
-    // check every minute for new temperature and send the highest every 5 minutes
-    timerCpuTemp.run(std::chrono::minutes(1),
-                     [&cpuTemp, &wolk]
-                     {
-                         cpuTemp.push_back(readCPUTemperature());
-                         if (cpuTemp.size() == 5)
-                         {
-                             auto maxTempAddr = std::max_element(cpuTemp.begin(), cpuTemp.end());
-                             wolk->addReading("cpuT", *maxTempAddr);
-                             wolk->publish();
-                             cpuTemp.clear();
-                         }
-                     });
+                    wolk->addReading(element.first, element.second);
+                }
+            }
+            currentIpMap = newIpMap;
+        }
+        wolk->publish();
+    });
 
+    // check every minute for new temperature and send the highest every 5 minutes
+    timerCpuTemp.run(std::chrono::minutes(1), [&cpuTemp, &wolk] {
+        cpuTemp.push_back(readCPUTemperature());
+        if (cpuTemp.size() == 5)
+        {
+            auto maxTempAddr = std::max_element(cpuTemp.begin(), cpuTemp.end());
+            wolk->addReading("cpuT", *maxTempAddr);
+            wolk->publish();
+            cpuTemp.clear();
+        }
+    });
     while (true)
     {
+        // Check if the log value on platform is valid
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        if (!deviceInfoHandler->isLogValid())
+        {
+            wolk->addReading("log", deviceInfoHandler->previousLogValue());
+            wolk->publish();
+            deviceInfoHandler->updateLogToValid();
+        }
     }
 
     return 0;
