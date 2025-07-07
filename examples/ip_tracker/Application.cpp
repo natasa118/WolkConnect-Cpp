@@ -100,7 +100,7 @@ std::pair<wolkabout::LogLevel, bool> fromString(std::string in)
 class DeviceDataChangeHandler : public wolkabout::connect::FeedUpdateHandler
 {
 public:
-    DeviceDataChangeHandler(std::string log, bool valid) : m_previousLog(log), m_isLogValid(valid) {}
+    DeviceDataChangeHandler(std::string log, bool valid) : m_logLevel(log), m_isLogValid(valid) {}
 
     void handleUpdate(const std::string& deviceKey,
                       const std::map<std::uint64_t, std::vector<wolkabout::Reading>>& readings) override
@@ -117,6 +117,7 @@ public:
 
                 // Lock the mutex
                 std::lock_guard<std::mutex> lock{mutex};
+                // std::unique_lock<std::mutex> lock{mutex};
 
                 // Check the reference on the readings
                 if (reading.getReference() == "log")
@@ -125,27 +126,28 @@ public:
                     if (in.second)
                     {
                         wolkabout::Logger::getInstance().setLevel(in.first);
-                        m_previousLog = toString(in.first);
+                        m_logLevel = toString(in.first);
                         LOG(INFO) << "Log has been updated";
                     }
                     else
                     {
                         LOG(INFO) << "Unknown log value";
                         m_isLogValid = false;
+                        conditionVariable.notify_one();
                     }
                 }
             }
 
             // Notify the condition variable
-            conditionVariable.notify_one();
+            // conditionVariable.notify_one();
         }
     }
     bool isLogValid() { return m_isLogValid; }
-    std::string previousLogValue() { return m_previousLog; }
+    std::string previousLogValue() { return m_logLevel; }
     void updateLogToValid() { m_isLogValid = true; }
 
 private:
-    std::string m_previousLog;
+    std::string m_logLevel;
     bool m_isLogValid;
 };
 
@@ -322,6 +324,7 @@ int main(int argc, char** argv)
     });
     while (true)
     {
+        /*
         // Check if the log value on platform is valid
         std::this_thread::sleep_for(std::chrono::seconds(2));
         if (!deviceInfoHandler->isLogValid())
@@ -330,6 +333,16 @@ int main(int argc, char** argv)
             wolk->publish();
             deviceInfoHandler->updateLogToValid();
         }
+            */
+        // std::thread proba(deviceInfoHandler);
+        // std::lock_guard<std::mutex> lock(mutex);
+        // conditionVariable.notify_one();
+
+        std::unique_lock<std::mutex> lock(mutex);
+        conditionVariable.wait(lock, [&deviceInfoHandler] { return !deviceInfoHandler->isLogValid(); });
+        wolk->addReading("log", deviceInfoHandler->previousLogValue());
+        wolk->publish();
+        deviceInfoHandler->updateLogToValid();
     }
 
     return 0;
