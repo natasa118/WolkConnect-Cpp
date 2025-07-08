@@ -1,2 +1,2 @@
 #!/bin/bash
-systemctl enable wolkabout-ELab && systemctl start wolkabout-ELab
+systemctl enable wolkconnect-cpp && systemctl start wolkconnect-cpp
