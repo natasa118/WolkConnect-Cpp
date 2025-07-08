@@ -22,4 +22,4 @@ cmake-build-release
 tools/release-*/
 
 .vscode/
-txtFiles/
+debian_build

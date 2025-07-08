@@ -1,11 +1,11 @@
-Source: wolkconnect-cpp
+Source: wolkabout-elab
 Section: main
 Priority: optional
 Maintainer: Wolkabout ELab <elab@wolkabout.com>
 Build-Depends: debhelper (>= 9)
 Standards-Version: 4.1.2
 
-Package: wolkconnect-cpp
+Package: wolkabout-elab 
 Architecture: any
 Section: main
 Depends: ${shlibs:Depends}, ${misc:Depends}, libssl1.0.0 | libssl1.1
