@@ -1,0 +1,4 @@
+out/build/lib/* 											/wolkabout/assignment/out/lib/
+out/lib/*   												/wolkabout/assignment/out/lib/
+out/bin/ip_tracker             									/wolkabout/assignment/out/bin/
+/txtFiles												/wolkabout/assignment/txtFiles
