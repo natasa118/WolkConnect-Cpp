@@ -1,2 +1,2 @@
 #!/bin/bash
-systemctl enable wolkconnect-cpp && systemctl start wolkconnect-cpp
+#systemctl enable wolkconnect-cpp && systemctl start wolkconnect-cpp
