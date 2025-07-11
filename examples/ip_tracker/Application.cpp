@@ -117,7 +117,6 @@ public:
 
                 // Lock the mutex
                 std::lock_guard<std::mutex> lock{mutex};
-                // std::unique_lock<std::mutex> lock{mutex};
 
                 // Check the reference on the readings
                 if (reading.getReference() == "log")
@@ -137,9 +136,6 @@ public:
                     }
                 }
             }
-
-            // Notify the condition variable
-            // conditionVariable.notify_one();
         }
     }
     bool isLogValid() { return m_isLogValid; }
@@ -150,25 +146,57 @@ private:
     std::string m_logLevel;
     bool m_isLogValid;
 };
-
-// Trying to read config file
-std::vector<std::string> readConfig(const std::string& path)
+// trims white spaces
+std::string trim(const std::string& str)
 {
-    std::ifstream file(path);
+    size_t start = 0;
+    while (start < str.length() && std::isspace(str[start]))
+    {
+        ++start;
+    }
 
+    size_t end = str.length();
+    while (end > start && std::isspace(str[end - 1]))
+    {
+        --end;
+    }
+
+    return str.substr(start, end - start);
+}
+// Trying to read json config file
+std::vector<std::string> readConfigJson(const std::string& path)
+{
+    std::vector<std::string> configInfo;
+
+    std::ifstream file(path);
     if (file.fail())
     {
         return {};
     }
-
-    std::vector<std::string> configInfo;
     std::string lineInFile;
     while (getline(file, lineInFile))
     {
-        configInfo.push_back(lineInFile);
+        if (lineInFile.front() == '[')
+        {
+            continue;
+        }
+        lineInFile = trim(lineInFile);
+        lineInFile = lineInFile.erase(0, 1);
+        if (lineInFile[lineInFile.length() - 1] == ',')
+        {
+            lineInFile.erase(lineInFile.length() - 2, 2);
+            configInfo.push_back(lineInFile);
+        }
+        else
+        {
+            lineInFile.erase(lineInFile.length() - 1, 1);
+            configInfo.push_back(lineInFile);
+            break;
+        }
     }
 
     file.close();
+
     return configInfo;
 }
 
@@ -244,10 +272,11 @@ int main(int argc, char** argv)
     // Checking for location of config file
     if (argv[1] == NULL)
     {
-        std::cout << "Write the location of the config file as an argument" << std::endl;
+        std::cout << "Write the location of the json config file as an argument" << std::endl;
         return 0;
     }
-    std::vector<std::string> config = readConfig(argv[1]);
+    std::vector<std::string> config = readConfigJson(argv[1]);
+
     if (config.empty())
     {
         std::cout << "Couldn't load config file" << std::endl;
@@ -295,49 +324,39 @@ int main(int argc, char** argv)
     wolkabout::Timer timerIP, timerCpuTemp;
 
     // check every 5 minutes if the IP address changed
-    timerIP.run(std::chrono::minutes(5), [&newIpMap, &currentIpMap, &wolk] {
-        newIpMap = returnIpAddress();
-        if (!(newIpMap == currentIpMap))
-        {
-            for (auto const& element : newIpMap)
-            {
-                if (currentIpMap[element.first] != element.second)
+    timerIP.run(std::chrono::minutes(5),
+                [&newIpMap, &currentIpMap, &wolk]
                 {
-                    wolk->addReading(element.first, element.second);
-                }
-            }
-            currentIpMap = newIpMap;
-        }
-        wolk->publish();
-    });
+                    newIpMap = returnIpAddress();
+                    if (!(newIpMap == currentIpMap))
+                    {
+                        for (auto const& element : newIpMap)
+                        {
+                            if (currentIpMap[element.first] != element.second)
+                            {
+                                wolk->addReading(element.first, element.second);
+                            }
+                        }
+                        currentIpMap = newIpMap;
+                    }
+                    wolk->publish();
+                });
 
     // check every minute for new temperature and send the highest every 5 minutes
-    timerCpuTemp.run(std::chrono::minutes(1), [&cpuTemp, &wolk] {
-        cpuTemp.push_back(readCPUTemperature());
-        if (cpuTemp.size() == 5)
-        {
-            auto maxTempAddr = std::max_element(cpuTemp.begin(), cpuTemp.end());
-            wolk->addReading("cpuT", *maxTempAddr);
-            wolk->publish();
-            cpuTemp.clear();
-        }
-    });
+    timerCpuTemp.run(std::chrono::minutes(1),
+                     [&cpuTemp, &wolk]
+                     {
+                         cpuTemp.push_back(readCPUTemperature());
+                         if (cpuTemp.size() == 5)
+                         {
+                             auto maxTempAddr = std::max_element(cpuTemp.begin(), cpuTemp.end());
+                             wolk->addReading("cpuT", *maxTempAddr);
+                             wolk->publish();
+                             cpuTemp.clear();
+                         }
+                     });
     while (true)
     {
-        /*
-        // Check if the log value on platform is valid
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        if (!deviceInfoHandler->isLogValid())
-        {
-            wolk->addReading("log", deviceInfoHandler->previousLogValue());
-            wolk->publish();
-            deviceInfoHandler->updateLogToValid();
-        }
-            */
-        // std::thread proba(deviceInfoHandler);
-        // std::lock_guard<std::mutex> lock(mutex);
-        // conditionVariable.notify_one();
-
         std::unique_lock<std::mutex> lock(mutex);
         conditionVariable.wait(lock, [&deviceInfoHandler] { return !deviceInfoHandler->isLogValid(); });
         wolk->addReading("log", deviceInfoHandler->previousLogValue());

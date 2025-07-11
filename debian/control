@@ -1,7 +1,7 @@
 Source: wolkconnect-cpp
 Section: main
 Priority: optional
-Maintainer: Wolkabout ELab <elab@wolkabout.com>
+Maintainer: natasa <balognatasa118@gmail.com>
 Build-Depends: debhelper (>= 9)
 Standards-Version: 4.1.2
 
