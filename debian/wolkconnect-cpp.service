@@ -10,7 +10,7 @@ User=root
 
 Type=simple
 
-ExecStart=/opt/wolkabout/assignment/out/bin/ip_tracker /opt/wolkabout/assignment/configuration/config
+ExecStart=/opt/wolkabout/assignment/out/bin/ip_tracker /opt/wolkabout/assignment/conf.json
 
 WorkingDirectory=/wolkabout
 
