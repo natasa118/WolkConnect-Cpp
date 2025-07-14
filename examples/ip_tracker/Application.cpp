@@ -149,13 +149,13 @@ private:
 // trims white spaces
 std::string trim(const std::string& str)
 {
-    size_t start = 0;
+    long unsigned int start = 0;
     while (start < str.length() && std::isspace(str[start]))
     {
         ++start;
     }
 
-    size_t end = str.length();
+    long unsigned int end = str.length();
     while (end > start && std::isspace(str[end - 1]))
     {
         --end;
@@ -324,37 +324,35 @@ int main(int argc, char** argv)
     wolkabout::Timer timerIP, timerCpuTemp;
 
     // check every 5 minutes if the IP address changed
-    timerIP.run(std::chrono::minutes(5),
-                [&newIpMap, &currentIpMap, &wolk]
+    timerIP.run(std::chrono::minutes(5), [&newIpMap, &currentIpMap, &wolk] {
+        newIpMap = returnIpAddress();
+        if (!(newIpMap == currentIpMap))
+        {
+            for (auto const& element : newIpMap)
+            {
+                if (currentIpMap[element.first] != element.second)
                 {
-                    newIpMap = returnIpAddress();
-                    if (!(newIpMap == currentIpMap))
-                    {
-                        for (auto const& element : newIpMap)
-                        {
-                            if (currentIpMap[element.first] != element.second)
-                            {
-                                wolk->addReading(element.first, element.second);
-                            }
-                        }
-                        currentIpMap = newIpMap;
-                    }
-                    wolk->publish();
-                });
+                    wolk->addReading(element.first, element.second);
+                    LOG(INFO) << "IP Address has been updated";
+                }
+            }
+            currentIpMap = newIpMap;
+        }
+        wolk->publish();
+    });
 
     // check every minute for new temperature and send the highest every 5 minutes
-    timerCpuTemp.run(std::chrono::minutes(1),
-                     [&cpuTemp, &wolk]
-                     {
-                         cpuTemp.push_back(readCPUTemperature());
-                         if (cpuTemp.size() == 5)
-                         {
-                             auto maxTempAddr = std::max_element(cpuTemp.begin(), cpuTemp.end());
-                             wolk->addReading("cpuT", *maxTempAddr);
-                             wolk->publish();
-                             cpuTemp.clear();
-                         }
-                     });
+    timerCpuTemp.run(std::chrono::minutes(1), [&cpuTemp, &wolk] {
+        cpuTemp.push_back(readCPUTemperature());
+        if (cpuTemp.size() == 5)
+        {
+            auto maxTempAddr = std::max_element(cpuTemp.begin(), cpuTemp.end());
+            wolk->addReading("cpuT", *maxTempAddr);
+            LOG(INFO) << "CPU temperature has been updated to " << *maxTempAddr;
+            wolk->publish();
+            cpuTemp.clear();
+        }
+    });
     while (true)
     {
         std::unique_lock<std::mutex> lock(mutex);
