@@ -16,6 +16,7 @@
 
 #include "core/utilities/Logger.h"
 #include "core/utilities/Timer.h"
+#include "core/utilities/nlohmann/json.hpp"
 #include "wolk/WolkBuilder.h"
 #include "wolk/WolkSingle.h"
 
@@ -146,23 +147,6 @@ private:
     std::string m_logLevel;
     bool m_isLogValid;
 };
-// trims white spaces
-std::string trim(const std::string& str)
-{
-    long unsigned int start = 0;
-    while (start < str.length() && std::isspace(str[start]))
-    {
-        ++start;
-    }
-
-    long unsigned int end = str.length();
-    while (end > start && std::isspace(str[end - 1]))
-    {
-        --end;
-    }
-
-    return str.substr(start, end - start);
-}
 // Trying to read json config file
 std::vector<std::string> readConfigJson(const std::string& path)
 {
@@ -174,29 +158,14 @@ std::vector<std::string> readConfigJson(const std::string& path)
         return {};
     }
     std::string lineInFile;
-    while (getline(file, lineInFile))
-    {
-        if (lineInFile.front() == '[')
-        {
-            continue;
-        }
-        lineInFile = trim(lineInFile);
-        lineInFile = lineInFile.erase(0, 1);
-        if (lineInFile[lineInFile.length() - 1] == ',')
-        {
-            lineInFile.erase(lineInFile.length() - 2, 2);
-            configInfo.push_back(lineInFile);
-        }
-        else
-        {
-            lineInFile.erase(lineInFile.length() - 1, 1);
-            configInfo.push_back(lineInFile);
-            break;
-        }
-    }
+
+    nlohmann::json configFile;
+    file >> configFile;
+    configInfo.push_back(configFile.at("deviceKey"));
+    configInfo.push_back(configFile.at("devicePassword"));
+    configInfo.push_back(configFile.at("platformHost"));
 
     file.close();
-
     return configInfo;
 }
 
