@@ -16,6 +16,7 @@
 
 #include "core/utilities/Logger.h"
 #include "core/utilities/Timer.h"
+#include "core/utilities/nlohmann/json.hpp"
 #include "wolk/WolkBuilder.h"
 #include "wolk/WolkSingle.h"
 
@@ -117,7 +118,6 @@ public:
 
                 // Lock the mutex
                 std::lock_guard<std::mutex> lock{mutex};
-                // std::unique_lock<std::mutex> lock{mutex};
 
                 // Check the reference on the readings
                 if (reading.getReference() == "log")
@@ -137,9 +137,6 @@ public:
                     }
                 }
             }
-
-            // Notify the condition variable
-            // conditionVariable.notify_one();
         }
     }
     bool isLogValid() { return m_isLogValid; }
@@ -150,24 +147,32 @@ private:
     std::string m_logLevel;
     bool m_isLogValid;
 };
-
-// Trying to read config file
-std::vector<std::string> readConfig(const std::string& path)
+// Trying to read json config file
+std::vector<std::string> readConfigJson(const std::string& path)
 {
-    std::ifstream file(path);
+    std::vector<std::string> configInfo;
 
+    std::ifstream file(path);
     if (file.fail())
     {
+        std::cout << "Couldn't load confing file" << std::endl;
         return {};
     }
 
-    std::vector<std::string> configInfo;
-    std::string lineInFile;
-    while (getline(file, lineInFile))
+    nlohmann::json configFile;
+    file >> configFile;
+    if (configFile.contains("deviceKey") && configFile.contains("deviceKey") && configFile.contains("deviceKey"))
     {
-        configInfo.push_back(lineInFile);
+        configInfo.push_back(configFile.at("deviceKey"));
+        configInfo.push_back(configFile.at("devicePassword"));
+        configInfo.push_back(configFile.at("platformHost"));
     }
-
+    else
+    {
+        std::cout << "Json file not formated properly" << std::endl;
+        file.close();
+        return {};
+    }
     file.close();
     return configInfo;
 }
@@ -244,13 +249,14 @@ int main(int argc, char** argv)
     // Checking for location of config file
     if (argv[1] == NULL)
     {
-        std::cout << "Write the location of the config file as an argument" << std::endl;
+        std::cout << "Write the location of the json config file as an argument" << std::endl;
         return 0;
     }
-    std::vector<std::string> config = readConfig(argv[1]);
+    std::vector<std::string> config = readConfigJson(argv[1]);
+
     if (config.empty())
     {
-        std::cout << "Couldn't load config file" << std::endl;
+        std::cout << "Error with loading file" << std::endl;
         return 0;
     }
     std::cout << "Config file loaded successfully" << std::endl;
@@ -304,6 +310,7 @@ int main(int argc, char** argv)
                 if (currentIpMap[element.first] != element.second)
                 {
                     wolk->addReading(element.first, element.second);
+                    LOG(INFO) << "IP Address has been updated";
                 }
             }
             currentIpMap = newIpMap;
@@ -318,26 +325,13 @@ int main(int argc, char** argv)
         {
             auto maxTempAddr = std::max_element(cpuTemp.begin(), cpuTemp.end());
             wolk->addReading("cpuT", *maxTempAddr);
+            LOG(INFO) << "CPU temperature has been updated to " << *maxTempAddr;
             wolk->publish();
             cpuTemp.clear();
         }
     });
     while (true)
     {
-        /*
-        // Check if the log value on platform is valid
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        if (!deviceInfoHandler->isLogValid())
-        {
-            wolk->addReading("log", deviceInfoHandler->previousLogValue());
-            wolk->publish();
-            deviceInfoHandler->updateLogToValid();
-        }
-            */
-        // std::thread proba(deviceInfoHandler);
-        // std::lock_guard<std::mutex> lock(mutex);
-        // conditionVariable.notify_one();
-
         std::unique_lock<std::mutex> lock(mutex);
         conditionVariable.wait(lock, [&deviceInfoHandler] { return !deviceInfoHandler->isLogValid(); });
         wolk->addReading("log", deviceInfoHandler->previousLogValue());

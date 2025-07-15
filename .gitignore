@@ -1,6 +1,5 @@
 # Build dir
 out
-dependencies
 docs/
 cmake-build-debug
 cmake-build-release
@@ -22,4 +21,6 @@ cmake-build-release
 tools/release-*/
 
 .vscode/
-txtFiles/
+debian_build
+
+*.zip

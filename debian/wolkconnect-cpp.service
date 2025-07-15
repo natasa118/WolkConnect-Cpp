@@ -1,0 +1,31 @@
+[Unit]
+
+Description=Service to start the ELabTest application
+
+After=multi-user.target
+
+[Service]
+
+User=root
+
+Type=simple
+
+ExecStart=/opt/wolkabout/assignment/out/bin/ip_tracker /opt/wolkabout/assignment/conf.json
+
+WorkingDirectory=/wolkabout
+
+Restart=always
+
+RestartSec=5
+
+StandardOutput=syslog
+
+StandardError=syslog
+
+SyslogIdentifier=%n
+
+[Install]
+
+WantedBy=multi-user.target
+
+
