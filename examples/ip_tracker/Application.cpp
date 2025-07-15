@@ -131,7 +131,7 @@ public:
                     }
                     else
                     {
-                        LOG(INFO) << "Unknown log value " << toString(in.first);
+                        LOG(INFO) << "Unknown log value " << reading.getStringValue() << " reverting to " << m_logLevel;
                         m_isLogValid = false;
                         conditionVariable.notify_one();
                     }
