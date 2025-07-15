@@ -16,6 +16,7 @@
 
 #include "core/utilities/Logger.h"
 #include "core/utilities/Timer.h"
+#include "core/utilities/nlohmann/json.hpp"
 #include "wolk/WolkBuilder.h"
 #include "wolk/WolkSingle.h"
 
@@ -125,12 +126,12 @@ public:
                     if (in.second)
                     {
                         wolkabout::Logger::getInstance().setLevel(in.first);
+                        LOG(INFO) << "Log has been updated from " << m_logLevel << " to " << toString(in.first);
                         m_logLevel = toString(in.first);
-                        LOG(INFO) << "Log has been updated";
                     }
                     else
                     {
-                        LOG(INFO) << "Unknown log value";
+                        LOG(INFO) << "Unknown log value " << toString(in.first);
                         m_isLogValid = false;
                         conditionVariable.notify_one();
                     }
@@ -146,23 +147,6 @@ private:
     std::string m_logLevel;
     bool m_isLogValid;
 };
-// trims white spaces
-std::string trim(const std::string& str)
-{
-    long unsigned int start = 0;
-    while (start < str.length() && std::isspace(str[start]))
-    {
-        ++start;
-    }
-
-    long unsigned int end = str.length();
-    while (end > start && std::isspace(str[end - 1]))
-    {
-        --end;
-    }
-
-    return str.substr(start, end - start);
-}
 // Trying to read json config file
 std::vector<std::string> readConfigJson(const std::string& path)
 {
@@ -171,32 +155,25 @@ std::vector<std::string> readConfigJson(const std::string& path)
     std::ifstream file(path);
     if (file.fail())
     {
+        std::cout << "Couldn't load confing file" << std::endl;
         return {};
     }
-    std::string lineInFile;
-    while (getline(file, lineInFile))
+
+    nlohmann::json configFile;
+    file >> configFile;
+    if (configFile.contains("deviceKey") && configFile.contains("deviceKey") && configFile.contains("deviceKey"))
     {
-        if (lineInFile.front() == '[')
-        {
-            continue;
-        }
-        lineInFile = trim(lineInFile);
-        lineInFile = lineInFile.erase(0, 1);
-        if (lineInFile[lineInFile.length() - 1] == ',')
-        {
-            lineInFile.erase(lineInFile.length() - 2, 2);
-            configInfo.push_back(lineInFile);
-        }
-        else
-        {
-            lineInFile.erase(lineInFile.length() - 1, 1);
-            configInfo.push_back(lineInFile);
-            break;
-        }
+        configInfo.push_back(configFile.at("deviceKey"));
+        configInfo.push_back(configFile.at("devicePassword"));
+        configInfo.push_back(configFile.at("platformHost"));
     }
-
+    else
+    {
+        std::cout << "Json file not formated properly" << std::endl;
+        file.close();
+        return {};
+    }
     file.close();
-
     return configInfo;
 }
 
@@ -279,7 +256,7 @@ int main(int argc, char** argv)
 
     if (config.empty())
     {
-        std::cout << "Couldn't load config file" << std::endl;
+        std::cout << "Error with loading file" << std::endl;
         return 0;
     }
     std::cout << "Config file loaded successfully" << std::endl;
@@ -320,20 +297,34 @@ int main(int argc, char** argv)
     double initialCpuTemp = readCPUTemperature();
     wolk->addReading("cpuT", initialCpuTemp);
 
-    // Making timers
+    // Making timers and setting the time they use
     wolkabout::Timer timerIP, timerCpuTemp;
+    const int TIMER_IP = 5;
+    const int TIMER_CPU = 1;
 
     // check every 5 minutes if the IP address changed
-    timerIP.run(std::chrono::minutes(5), [&newIpMap, &currentIpMap, &wolk] {
+
+    timerIP.run(std::chrono::minutes(TIMER_IP), [&newIpMap, &currentIpMap, &wolk] {
         newIpMap = returnIpAddress();
         if (!(newIpMap == currentIpMap))
         {
             for (auto const& element : newIpMap)
             {
-                if (currentIpMap[element.first] != element.second)
+                if (currentIpMap.find(newIpMap[element.first]) == currentIpMap.end() ||
+                    currentIpMap[element.second] != newIpMap[element.second])
                 {
                     wolk->addReading(element.first, element.second);
-                    LOG(INFO) << "IP Address has been updated";
+                    std::string outdatedIP;
+                    if (currentIpMap.find(newIpMap[element.first]) == currentIpMap.end())
+                    {
+                        outdatedIP = "null";
+                    }
+                    else
+                    {
+                        outdatedIP = currentIpMap[element.second];
+                    }
+                    LOG(INFO) << newIpMap[element.first] << " IP Address has been updated from " << outdatedIP << " to "
+                              << newIpMap[element.second];
                 }
             }
             currentIpMap = newIpMap;
@@ -342,15 +333,16 @@ int main(int argc, char** argv)
     });
 
     // check every minute for new temperature and send the highest every 5 minutes
-    timerCpuTemp.run(std::chrono::minutes(1), [&cpuTemp, &wolk] {
+    timerCpuTemp.run(std::chrono::minutes(TIMER_CPU), [&cpuTemp, &wolk, &initialCpuTemp] {
         cpuTemp.push_back(readCPUTemperature());
         if (cpuTemp.size() == 5)
         {
             auto maxTempAddr = std::max_element(cpuTemp.begin(), cpuTemp.end());
             wolk->addReading("cpuT", *maxTempAddr);
-            LOG(INFO) << "CPU temperature has been updated to " << *maxTempAddr;
+            LOG(INFO) << "CPU temperature has been updated from " << initialCpuTemp << " to " << *maxTempAddr;
             wolk->publish();
             cpuTemp.clear();
+            initialCpuTemp = *maxTempAddr;
         }
     });
     while (true)
