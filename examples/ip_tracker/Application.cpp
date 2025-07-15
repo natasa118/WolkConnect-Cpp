@@ -155,16 +155,24 @@ std::vector<std::string> readConfigJson(const std::string& path)
     std::ifstream file(path);
     if (file.fail())
     {
+        std::cout << "Couldn't load confing file" << std::endl;
         return {};
     }
-    std::string lineInFile;
 
     nlohmann::json configFile;
     file >> configFile;
-    configInfo.push_back(configFile.at("deviceKey"));
-    configInfo.push_back(configFile.at("devicePassword"));
-    configInfo.push_back(configFile.at("platformHost"));
-
+    if (configFile.contains("deviceKey") && configFile.contains("deviceKey") && configFile.contains("deviceKey"))
+    {
+        configInfo.push_back(configFile.at("deviceKey"));
+        configInfo.push_back(configFile.at("devicePassword"));
+        configInfo.push_back(configFile.at("platformHost"));
+    }
+    else
+    {
+        std::cout << "Json file not formated properly" << std::endl;
+        file.close();
+        return {};
+    }
     file.close();
     return configInfo;
 }
@@ -248,7 +256,7 @@ int main(int argc, char** argv)
 
     if (config.empty())
     {
-        std::cout << "Couldn't load config file" << std::endl;
+        std::cout << "Error with loading file" << std::endl;
         return 0;
     }
     std::cout << "Config file loaded successfully" << std::endl;
