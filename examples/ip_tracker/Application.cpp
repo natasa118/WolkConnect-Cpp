@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "core/persistence/inmemory/InMemoryPersistence.h"
 #include "core/utilities/Logger.h"
 #include "core/utilities/Timer.h"
 #include "core/utilities/nlohmann/json.hpp"
@@ -161,7 +162,8 @@ std::vector<std::string> readConfigJson(const std::string& path)
 
     nlohmann::json configFile;
     file >> configFile;
-    if (configFile.contains("deviceKey") && configFile.contains("deviceKey") && configFile.contains("deviceKey"))
+    if (configFile.contains("deviceKey") && configFile.contains("devicePassword") &&
+        configFile.contains("platformHost"))
     {
         configInfo.push_back(configFile.at("deviceKey"));
         configInfo.push_back(configFile.at("devicePassword"));
@@ -268,18 +270,26 @@ int main(int argc, char** argv)
         std::cout << "Couldn't find IP Address" << std::endl;
     }
 
+    const std::string FILE_MANAGEMENT_LOCATION = "./log_files";
+
     // This is the logger setup
-    wolkabout::Logger::init(wolkabout::LogLevel::INFO,
-                            wolkabout::Logger::Type::CONSOLE | wolkabout::Logger::Type::FILE);
+    wolkabout::Logger::init(wolkabout::LogLevel::INFO, wolkabout::Logger::Type::CONSOLE | wolkabout::Logger::Type::FILE,
+                            FILE_MANAGEMENT_LOCATION + "/ip_tracker");
 
     // Here we create the device that we are presenting as on the platform.
     auto device = wolkabout::Device(config[0], config[1], wolkabout::OutboundDataMode::PUSH);
 
     auto deviceInfoHandler = std::make_shared<DeviceDataChangeHandler>(toString(wolkabout::LogLevel::INFO), true);
 
+    auto inMemoryPersistence = std::unique_ptr<wolkabout::InMemoryPersistence>(new wolkabout::InMemoryPersistence);
+
     // And here we create the wolk session
-    auto wolk =
-      wolkabout::connect::WolkBuilder(device).host(config[2]).feedUpdateHandler(deviceInfoHandler).buildWolkSingle();
+    auto wolk = wolkabout::connect::WolkBuilder(device)
+                  .host(config[2])
+                  .feedUpdateHandler(deviceInfoHandler)
+                  .withPersistence(std::move(inMemoryPersistence))
+                  .withFileTransfer(FILE_MANAGEMENT_LOCATION)
+                  .buildWolkSingle();
     wolk->connect();
 
     // Setting initial log value
@@ -303,7 +313,6 @@ int main(int argc, char** argv)
     const int TIMER_CPU = 1;
 
     // check every 5 minutes if the IP address changed
-
     timerIP.run(std::chrono::minutes(TIMER_IP), [&newIpMap, &currentIpMap, &wolk] {
         newIpMap = returnIpAddress();
         if (!(newIpMap == currentIpMap))
@@ -354,5 +363,6 @@ int main(int argc, char** argv)
         deviceInfoHandler->updateLogToValid();
     }
 
+    wolk->disconnect();
     return 0;
 }
