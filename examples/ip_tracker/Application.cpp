@@ -163,7 +163,7 @@ std::vector<std::string> readConfigJson(const std::string& path)
     nlohmann::json configFile;
     file >> configFile;
     if (configFile.contains("deviceKey") && configFile.contains("devicePassword") &&
-        configFile.contains("platformHost"))
+        configFile.contains("platformHost"))  
     {
         configInfo.push_back(configFile.at("deviceKey"));
         configInfo.push_back(configFile.at("devicePassword"));
