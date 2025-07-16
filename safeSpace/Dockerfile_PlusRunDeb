@@ -8,6 +8,6 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN apt update && apt install -y git gcc g++ cmake automake autotools-dev autoconf m4 zlib1g-dev \
  cmake libtool libssl-dev devscripts debhelper libpthread-stubs0-dev systemd
 
-COPY wolkconnect-cpp_4.1.0_amd64.deb /build
+COPY *.deb /build
 
-RUN apt install -y ./wolkconnect-cpp_4.1.0_amd64.deb
+RUN apt install -y ./*.deb

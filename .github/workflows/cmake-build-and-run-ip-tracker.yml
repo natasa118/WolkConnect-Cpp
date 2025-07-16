@@ -1,0 +1,39 @@
+name: Run ip_tracker
+
+on:
+  push:
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v1
+        with:
+          submodules: recursive
+
+      - name: Install Dependencies
+        run: sudo apt update && sudo apt install -y git gcc g++ cmake automake autotools-dev autoconf m4 zlib1g-dev cmake libtool libssl-dev devscripts debhelper libpthread-stubs0-dev
+
+      - name: Create Build Environment
+        run: cmake -E make_directory ${{runner.workspace}}/out
+
+      - name: Configure CMake
+        shell: bash
+        working-directory: ${{runner.workspace}}/out
+        run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+
+      - name: Build
+        working-directory: ${{runner.workspace}}/out
+        shell: bash
+        run: make -j$(nproc)
+
+      - name: Run
+        shell: bash
+        working-directory: ${{runner.workspace}}/out
+        run: bin/ip_tracker ${{github.workspace}}/configuration/conf.json

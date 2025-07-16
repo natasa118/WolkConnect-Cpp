@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "core/persistence/inmemory/InMemoryPersistence.h"
 #include "core/utilities/Logger.h"
 #include "core/utilities/Timer.h"
 #include "core/utilities/nlohmann/json.hpp"
@@ -126,12 +127,12 @@ public:
                     if (in.second)
                     {
                         wolkabout::Logger::getInstance().setLevel(in.first);
+                        LOG(INFO) << "Log has been updated from " << m_logLevel << " to " << toString(in.first);
                         m_logLevel = toString(in.first);
-                        LOG(INFO) << "Log has been updated";
                     }
                     else
                     {
-                        LOG(INFO) << "Unknown log value";
+                        LOG(INFO) << "Unknown log value " << reading.getStringValue() << " reverting to " << m_logLevel;
                         m_isLogValid = false;
                         conditionVariable.notify_one();
                     }
@@ -161,7 +162,8 @@ std::vector<std::string> readConfigJson(const std::string& path)
 
     nlohmann::json configFile;
     file >> configFile;
-    if (configFile.contains("deviceKey") && configFile.contains("deviceKey") && configFile.contains("deviceKey"))
+    if (configFile.contains("deviceKey") && configFile.contains("devicePassword") &&
+        configFile.contains("platformHost"))  
     {
         configInfo.push_back(configFile.at("deviceKey"));
         configInfo.push_back(configFile.at("devicePassword"));
@@ -268,18 +270,26 @@ int main(int argc, char** argv)
         std::cout << "Couldn't find IP Address" << std::endl;
     }
 
+    const std::string FILE_MANAGEMENT_LOCATION = "./log_files";
+
     // This is the logger setup
-    wolkabout::Logger::init(wolkabout::LogLevel::INFO,
-                            wolkabout::Logger::Type::CONSOLE | wolkabout::Logger::Type::FILE);
+    wolkabout::Logger::init(wolkabout::LogLevel::INFO, wolkabout::Logger::Type::CONSOLE | wolkabout::Logger::Type::FILE,
+                            FILE_MANAGEMENT_LOCATION + "/ip_tracker");
 
     // Here we create the device that we are presenting as on the platform.
     auto device = wolkabout::Device(config[0], config[1], wolkabout::OutboundDataMode::PUSH);
 
     auto deviceInfoHandler = std::make_shared<DeviceDataChangeHandler>(toString(wolkabout::LogLevel::INFO), true);
 
+    auto inMemoryPersistence = std::unique_ptr<wolkabout::InMemoryPersistence>(new wolkabout::InMemoryPersistence);
+
     // And here we create the wolk session
-    auto wolk =
-      wolkabout::connect::WolkBuilder(device).host(config[2]).feedUpdateHandler(deviceInfoHandler).buildWolkSingle();
+    auto wolk = wolkabout::connect::WolkBuilder(device)
+                  .host(config[2])
+                  .feedUpdateHandler(deviceInfoHandler)
+                  .withPersistence(std::move(inMemoryPersistence))
+                  .withFileTransfer(FILE_MANAGEMENT_LOCATION)
+                  .buildWolkSingle();
     wolk->connect();
 
     // Setting initial log value
@@ -297,20 +307,33 @@ int main(int argc, char** argv)
     double initialCpuTemp = readCPUTemperature();
     wolk->addReading("cpuT", initialCpuTemp);
 
-    // Making timers
+    // Making timers and setting the time they use
     wolkabout::Timer timerIP, timerCpuTemp;
+    const int TIMER_IP = 5;
+    const int TIMER_CPU = 1;
 
     // check every 5 minutes if the IP address changed
-    timerIP.run(std::chrono::minutes(5), [&newIpMap, &currentIpMap, &wolk] {
+    timerIP.run(std::chrono::minutes(TIMER_IP), [&newIpMap, &currentIpMap, &wolk] {
         newIpMap = returnIpAddress();
         if (!(newIpMap == currentIpMap))
         {
             for (auto const& element : newIpMap)
             {
-                if (currentIpMap[element.first] != element.second)
+                if (currentIpMap.find(newIpMap[element.first]) == currentIpMap.end() ||
+                    currentIpMap[element.second] != newIpMap[element.second])
                 {
                     wolk->addReading(element.first, element.second);
-                    LOG(INFO) << "IP Address has been updated";
+                    std::string outdatedIP;
+                    if (currentIpMap.find(newIpMap[element.first]) == currentIpMap.end())
+                    {
+                        outdatedIP = "null";
+                    }
+                    else
+                    {
+                        outdatedIP = currentIpMap[element.second];
+                    }
+                    LOG(INFO) << newIpMap[element.first] << " IP Address has been updated from " << outdatedIP << " to "
+                              << newIpMap[element.second];
                 }
             }
             currentIpMap = newIpMap;
@@ -319,15 +342,16 @@ int main(int argc, char** argv)
     });
 
     // check every minute for new temperature and send the highest every 5 minutes
-    timerCpuTemp.run(std::chrono::minutes(1), [&cpuTemp, &wolk] {
+    timerCpuTemp.run(std::chrono::minutes(TIMER_CPU), [&cpuTemp, &wolk, &initialCpuTemp] {
         cpuTemp.push_back(readCPUTemperature());
         if (cpuTemp.size() == 5)
         {
             auto maxTempAddr = std::max_element(cpuTemp.begin(), cpuTemp.end());
             wolk->addReading("cpuT", *maxTempAddr);
-            LOG(INFO) << "CPU temperature has been updated to " << *maxTempAddr;
+            LOG(INFO) << "CPU temperature has been updated from " << initialCpuTemp << " to " << *maxTempAddr;
             wolk->publish();
             cpuTemp.clear();
+            initialCpuTemp = *maxTempAddr;
         }
     });
     while (true)
@@ -339,5 +363,6 @@ int main(int argc, char** argv)
         deviceInfoHandler->updateLogToValid();
     }
 
+    wolk->disconnect();
     return 0;
 }
