@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-#include "core/persistence/inmemory/InMemoryPersistence.h"
+#include "MyPersistence.h"
+#include "core/model/Attribute.h"
+#include "core/persistence/Persistence.h"
 #include "core/utilities/Logger.h"
 #include "core/utilities/Timer.h"
 #include "core/utilities/nlohmann/json.hpp"
@@ -25,8 +27,6 @@
 #include <fstream>
 #include <ifaddrs.h>
 #include <iostream>
-#include <netdb.h>
-#include <random>
 #include <string>
 #include <vector>
 
@@ -148,6 +148,7 @@ private:
     std::string m_logLevel;
     bool m_isLogValid;
 };
+
 // Trying to read json config file
 std::vector<std::string> readConfigJson(const std::string& path)
 {
@@ -163,7 +164,7 @@ std::vector<std::string> readConfigJson(const std::string& path)
     nlohmann::json configFile;
     file >> configFile;
     if (configFile.contains("deviceKey") && configFile.contains("devicePassword") &&
-        configFile.contains("platformHost"))  
+        configFile.contains("platformHost"))
     {
         configInfo.push_back(configFile.at("deviceKey"));
         configInfo.push_back(configFile.at("devicePassword"));
@@ -256,7 +257,7 @@ int main(int argc, char** argv)
     }
     std::vector<std::string> config = readConfigJson(argv[1]);
 
-    if (config.empty())
+    if (config.empty() || config[0] == "" || config[1] == "" || config[2] == "")
     {
         std::cout << "Error with loading file" << std::endl;
         return 0;
@@ -270,25 +271,24 @@ int main(int argc, char** argv)
         std::cout << "Couldn't find IP Address" << std::endl;
     }
 
-    const std::string FILE_MANAGEMENT_LOCATION = "./log_files";
+    const std::string FILE_MANAGEMENT_PATH = "./log_files";
 
     // This is the logger setup
     wolkabout::Logger::init(wolkabout::LogLevel::INFO, wolkabout::Logger::Type::CONSOLE | wolkabout::Logger::Type::FILE,
-                            FILE_MANAGEMENT_LOCATION + "/ip_tracker");
+                            FILE_MANAGEMENT_PATH + "/ip_tracker");
 
     // Here we create the device that we are presenting as on the platform.
     auto device = wolkabout::Device(config[0], config[1], wolkabout::OutboundDataMode::PUSH);
 
     auto deviceInfoHandler = std::make_shared<DeviceDataChangeHandler>(toString(wolkabout::LogLevel::INFO), true);
-
-    auto inMemoryPersistence = std::unique_ptr<wolkabout::InMemoryPersistence>(new wolkabout::InMemoryPersistence);
+    auto myPersistence = std::unique_ptr<natasa::MyPersistence>(new natasa::MyPersistence);
 
     // And here we create the wolk session
     auto wolk = wolkabout::connect::WolkBuilder(device)
                   .host(config[2])
                   .feedUpdateHandler(deviceInfoHandler)
-                  .withPersistence(std::move(inMemoryPersistence))
-                  .withFileTransfer(FILE_MANAGEMENT_LOCATION)
+                  .withPersistence(std::move(myPersistence))
+                  .withFileTransfer(FILE_MANAGEMENT_PATH)
                   .buildWolkSingle();
     wolk->connect();
 
@@ -301,6 +301,7 @@ int main(int argc, char** argv)
     {
         wolk->addReading(element.first, element.second);
     }
+    wolk->pullFeedValues();
 
     // Initial CPU temperature
     std::vector<double> cpuTemp;
@@ -319,23 +320,36 @@ int main(int argc, char** argv)
         {
             for (auto const& element : newIpMap)
             {
-                if (currentIpMap.find(newIpMap[element.first]) == currentIpMap.end() ||
-                    currentIpMap[element.second] != newIpMap[element.second])
+                if (currentIpMap.find(element.first) == currentIpMap.end() ||
+                    currentIpMap[element.first] != newIpMap[element.first])
                 {
                     wolk->addReading(element.first, element.second);
                     std::string outdatedIP;
-                    if (currentIpMap.find(newIpMap[element.first]) == currentIpMap.end())
+                    if (currentIpMap.find(element.first) == currentIpMap.end())
                     {
                         outdatedIP = "null";
                     }
                     else
                     {
-                        outdatedIP = currentIpMap[element.second];
+                        outdatedIP = element.second;
                     }
-                    LOG(INFO) << newIpMap[element.first] << " IP Address has been updated from " << outdatedIP << " to "
-                              << newIpMap[element.second];
+                    LOG(INFO) << element.first << " IP Address has been updated from " << outdatedIP << " to "
+                              << element.second;
                 }
             }
+
+            if (newIpMap.size() < currentIpMap.size())
+            {
+                for (auto const& element : currentIpMap)
+                {
+                    if (newIpMap.find(element.first) == newIpMap.end())
+                    {
+                        wolk->addReading(element.first, "null");
+                        LOG(INFO) << element.first << " IP Address has been lost";
+                    }
+                }
+            }
+
             currentIpMap = newIpMap;
         }
         wolk->publish();
