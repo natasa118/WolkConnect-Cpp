@@ -11,13 +11,17 @@
 
 MyPersistence::MyPersistence()
 {
-    emptyFile();
+    this->m_persistenceFilePath = "./log_files/persistence_file";
+}
+MyPersistence::MyPersistence(std::string path)
+{
+    this->m_persistenceFilePath = path;
 }
 
 bool MyPersistence::putReading(const std::string& key, const wolkabout::Reading& reading)
 {
     std::ofstream file;
-    file.open(m_PERSISTENCE_FILE_PATH, std::ios_base::app);
+    file.open(m_persistenceFilePath, std::ios_base::app);
 
     if (!file.is_open())
     {
@@ -55,7 +59,7 @@ void MyPersistence::removeReadings(const std::string& key, uint_fast64_t count)
     emptyFile();
 
     std::ofstream file;
-    file.open(m_PERSISTENCE_FILE_PATH, std::ios_base::app);
+    file.open(m_persistenceFilePath, std::ios_base::app);
 
     if (!file.is_open())
     {
@@ -139,14 +143,14 @@ bool MyPersistence::isEmpty()
 
 void MyPersistence::emptyFile()
 {
-    std::ofstream file(m_PERSISTENCE_FILE_PATH, std::ios::trunc);
+    std::ofstream file(m_persistenceFilePath, std::ios::trunc);
     file.close();
 }
 std::map<std::string, std::vector<std::shared_ptr<wolkabout::Reading>>> MyPersistence::getRead()
 {
     std::map<std::string, std::vector<std::shared_ptr<wolkabout::Reading>>> reading;
     std::string line;
-    std::ifstream file(m_PERSISTENCE_FILE_PATH);
+    std::ifstream file(m_persistenceFilePath);
     if (!file.is_open())
     {
         std::cout << "Couldn't open persistence file to read from" << std::endl;

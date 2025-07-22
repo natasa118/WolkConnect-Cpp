@@ -10,6 +10,7 @@ class MyPersistence : public wolkabout::Persistence
 {
 public:
     MyPersistence();
+    MyPersistence(std::string path);
     ~MyPersistence() override = default;
 
     bool putReading(const std::string& key, const wolkabout::Reading& reading) override;
@@ -48,7 +49,7 @@ public:
     bool isEmpty() override;
 
 private:
-    const std::string m_PERSISTENCE_FILE_PATH = "./log_files/persistence_file";
+    std::string m_persistenceFilePath = "./log_files/persistence_file";
     void emptyFile();
     std::map<std::string, std::vector<std::shared_ptr<wolkabout::Reading>>> getRead();
 };
