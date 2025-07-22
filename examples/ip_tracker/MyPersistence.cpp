@@ -9,11 +9,12 @@
 #include <string>
 #include <vector>
 
-MyPersistence::MyPersistence()
+namespace natasa
 {
-    this->m_persistenceFilePath = "./log_files/persistence_file";
+MyPersistence::MyPersistence() {}
+MyPersistence::MyPersistence(std::string path = natasa::defaultPersistenceFile) : m_persistenceFilePath{std::move(path)}
+{
 }
-MyPersistence::MyPersistence(std::string& path) : m_persistenceFilePath{path} {}
 
 bool MyPersistence::putReading(const std::string& key, const wolkabout::Reading& reading)
 {
@@ -176,3 +177,4 @@ std::map<std::string, std::vector<std::shared_ptr<wolkabout::Reading>>> MyPersis
     file.close();
     return reading;
 }
+}    // namespace natasa

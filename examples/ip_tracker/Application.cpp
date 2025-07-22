@@ -281,7 +281,7 @@ int main(int argc, char** argv)
     auto device = wolkabout::Device(config[0], config[1], wolkabout::OutboundDataMode::PUSH);
 
     auto deviceInfoHandler = std::make_shared<DeviceDataChangeHandler>(toString(wolkabout::LogLevel::INFO), true);
-    auto myPersistence = std::unique_ptr<MyPersistence>(new MyPersistence);
+    auto myPersistence = std::unique_ptr<natasa::MyPersistence>(new natasa::MyPersistence);
 
     // And here we create the wolk session
     auto wolk = wolkabout::connect::WolkBuilder(device)

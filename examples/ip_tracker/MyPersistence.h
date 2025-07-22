@@ -6,11 +6,14 @@
 #include "wolk/WolkBuilder.h"
 #include "wolk/WolkSingle.h"
 
+namespace natasa
+{
+const std::string defaultPersistenceFile = "./log_files/persistence_file";
 class MyPersistence : public wolkabout::Persistence
 {
 public:
     MyPersistence();
-    MyPersistence(std::string& path);
+    MyPersistence(std::string path);
     ~MyPersistence() override = default;
 
     bool putReading(const std::string& key, const wolkabout::Reading& reading) override;
@@ -53,5 +56,5 @@ private:
     void emptyFile();
     std::map<std::string, std::vector<std::shared_ptr<wolkabout::Reading>>> getRead();
 };
-
+}    // namespace natasa
 #endif
