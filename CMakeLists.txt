@@ -16,6 +16,7 @@ cmake_minimum_required(VERSION 3.5)
 project(WolkAboutConnector C CXX)
 
 set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_BUILD_TYPE Debug)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}     -Wall -Wextra -pedantic                                                    \
                                             -pedantic-errors -Wcast-align                                              \
@@ -282,7 +283,11 @@ if (${BUILD_EXAMPLES})
     set_target_properties(subdevices_example PROPERTIES INSTALL_RPATH "$ORIGIN/../lib")
 
     #IP Tracker
-    set(IP_TRACKER_SOURCE_FILES examples/ip_tracker/Application.cpp)
+    set(IP_TRACKER_SOURCE_FILES 
+            examples/ip_tracker/Application.cpp 
+            examples/ip_tracker/MyPersistence.cpp 
+            examples/ip_tracker/MyPersistence.h)
+
 
     add_executable(ip_tracker ${IP_TRACKER_SOURCE_FILES})
     target_link_libraries(ip_tracker ${PROJECT_NAME})
