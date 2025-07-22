@@ -314,7 +314,7 @@ int main(int argc, char** argv)
     const int TIMER_CPU = 1;
 
     // check every 5 minutes if the IP address changed
-    timerIP.run(std::chrono::seconds(TIMER_IP), [&newIpMap, &currentIpMap, &wolk] {
+    timerIP.run(std::chrono::minutes(TIMER_IP), [&newIpMap, &currentIpMap, &wolk] {
         newIpMap = returnIpAddress();
         if (!(newIpMap == currentIpMap))
         {
@@ -356,7 +356,7 @@ int main(int argc, char** argv)
     });
 
     // check every minute for new temperature and send the highest every 5 minutes
-    timerCpuTemp.run(std::chrono::seconds(TIMER_CPU), [&cpuTemp, &wolk, &initialCpuTemp] {
+    timerCpuTemp.run(std::chrono::minutes(TIMER_CPU), [&cpuTemp, &wolk, &initialCpuTemp] {
         cpuTemp.push_back(readCPUTemperature());
         if (cpuTemp.size() == 5)
         {

@@ -10,7 +10,7 @@ class MyPersistence : public wolkabout::Persistence
 {
 public:
     MyPersistence();
-    MyPersistence(std::string path);
+    MyPersistence(std::string& path);
     ~MyPersistence() override = default;
 
     bool putReading(const std::string& key, const wolkabout::Reading& reading) override;

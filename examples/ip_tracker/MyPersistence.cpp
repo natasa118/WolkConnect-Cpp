@@ -13,10 +13,7 @@ MyPersistence::MyPersistence()
 {
     this->m_persistenceFilePath = "./log_files/persistence_file";
 }
-MyPersistence::MyPersistence(std::string path)
-{
-    this->m_persistenceFilePath = path;
-}
+MyPersistence::MyPersistence(std::string& path) : m_persistenceFilePath{path} {}
 
 bool MyPersistence::putReading(const std::string& key, const wolkabout::Reading& reading)
 {
